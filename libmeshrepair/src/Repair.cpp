@@ -3,9 +3,11 @@
 #include "meshrepair/Repair.hpp"
 
 #include "Internal.hpp"
+#include "meshrepair/IO.hpp"
 
 #include <cstdio>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_set>
 
 namespace meshrepair {
@@ -152,6 +154,25 @@ void orient_shells(WorkMesh& m, Context& ctx)
     }
 }
 
+bool is_zero_volume(const ShellInfo& s, size_t i, double thickness_eps)
+{
+    // The "thickness" 2V/A of the closed shell is negligible.
+    return s.closed[i] && 2.0 * std::abs(s.volume[i]) <= thickness_eps * s.area[i];
+}
+
+// Throws when nothing printable is left: every shell is a closed surface
+// enclosing no volume (single sided sheets made closed by hole filling).
+void check_has_volume(const WorkMesh& m, double thickness_eps)
+{
+    const ShellInfo s = compute_shells(m);
+    for (size_t i = 0; i < s.faces.size(); ++i)
+        if (!is_zero_volume(s, i, thickness_eps))
+            return;
+    throw std::runtime_error("The model has no volume: it only consists of zero-thickness surfaces "
+                             "(or of faces that cancel each other out), so no printable solid could be built. "
+                             "If the surfaces are separated by gaps, try a larger crack tolerance.");
+}
+
 void remove_shells(WorkMesh& m, Context& ctx, double thickness_eps)
 {
     const RepairOptions& opt = *ctx.options;
@@ -168,39 +189,35 @@ void remove_shells(WorkMesh& m, Context& ctx, double thickness_eps)
     for (size_t i = 0; i < s.faces.size(); ++i) {
         const double v    = std::abs(s.volume[i]);
         bool         drop = false;
-        // Zero volume: the "thickness" 2V/A of the closed shell is negligible.
-        if (opt.remove_zero_volume_shells && s.closed[i] && 2.0 * v <= thickness_eps * s.area[i])
+        if (opt.remove_zero_volume_shells && is_zero_volume(s, i, thickness_eps))
             drop = true;
         if (opt.min_shell_volume_ratio > 0.0 && v < opt.min_shell_volume_ratio * vmax)
             drop = true;
-        // Never remove everything.
-        if (drop && removed_shells + 1 == s.faces.size())
-            drop = false;
         if (drop) {
             ++removed_shells;
             for (int f : s.faces[i])
                 remove[f] = 1;
         }
     }
-    if (removed_shells > 0) {
+    // Never remove everything: a model made only of sheets stays as it is.
+    if (removed_shells > 0 && removed_shells < s.faces.size()) {
         m.remove_faces(remove);
         ctx.stats->shells_removed += removed_shells;
     }
 }
 
-// Moves vertices that share a position (as seen in single precision, which
-// is what STL / 3MF store) slightly towards their own faces.
-void separate_coincident_vertices(WorkMesh& m, Context& ctx)
+// Groups of vertices that share a position once rounded to single precision.
+std::vector<std::vector<int>> float_coincident_groups(const std::vector<Vec3>& P)
 {
-    m.compact_vertices();
     struct Key
     {
         float x, y, z;
         int   v;
     };
-    std::vector<Key> keys(m.P.size());
-    for (size_t v = 0; v < m.P.size(); ++v)
-        keys[v] = { float(m.P[v].x) + 0.0f, float(m.P[v].y) + 0.0f, float(m.P[v].z) + 0.0f, int(v) };
+    std::vector<Key> keys(P.size());
+    for (size_t v = 0; v < P.size(); ++v)
+        keys[v] = { float(P[v].x) + 0.0f, float(P[v].y) + 0.0f, float(P[v].z) + 0.0f, int(v) };
+    auto same = [](const Key& a, const Key& b) { return a.x == b.x && a.y == b.y && a.z == b.z; };
     std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
         if (a.x != b.x)
             return a.x < b.x;
@@ -210,47 +227,104 @@ void separate_coincident_vertices(WorkMesh& m, Context& ctx)
             return a.z < b.z;
         return a.v < b.v;
     });
-    std::vector<int> group_vertices;
-    for (size_t i = 0; i + 1 < keys.size(); ++i)
-        if (keys[i].x == keys[i + 1].x && keys[i].y == keys[i + 1].y && keys[i].z == keys[i + 1].z) {
-            group_vertices.push_back(keys[i].v);
-            group_vertices.push_back(keys[i + 1].v);
+    std::vector<std::vector<int>> groups;
+    for (size_t i = 0; i < keys.size();) {
+        size_t j = i + 1;
+        while (j < keys.size() && same(keys[i], keys[j]))
+            ++j;
+        if (j - i > 1) {
+            groups.emplace_back();
+            for (size_t k = i; k < j; ++k)
+                groups.back().push_back(keys[k].v);
         }
-    if (group_vertices.empty())
-        return;
-    std::sort(group_vertices.begin(), group_vertices.end());
-    group_vertices.erase(std::unique(group_vertices.begin(), group_vertices.end()), group_vertices.end());
+        i = j;
+    }
+    return groups;
+}
 
-    std::vector<char> affected(m.P.size(), 0);
-    for (int v : group_vertices)
-        affected[v] = 1;
-    std::vector<Vec3>   dir(m.P.size());
-    std::vector<double> min_edge(m.P.size(), std::numeric_limits<double>::max());
-    for (size_t f = 0; f < m.F.size(); ++f) {
-        const Triangle& t = m.F[f];
-        const Vec3      c = (m.P[t[0]] + m.P[t[1]] + m.P[t[2]]) / 3.0;
-        for (int k = 0; k < 3; ++k) {
-            const int v = t[k];
-            if (!affected[v])
-                continue;
-            const double w = m.area(f);
-            dir[v] += (c - m.P[v]).normalized() * w;
-            min_edge[v] = std::min({ min_edge[v], (m.P[t[(k + 1) % 3]] - m.P[v]).norm(),
-                                     (m.P[t[(k + 2) % 3]] - m.P[v]).norm() });
+// Splitting non-manifold vertices leaves several vertices at one position.
+// File formats without connectivity (STL) merge them again on load, so they
+// are moved apart by a few micrometres. Every copy moves into the region its
+// shell encloses (into the material for a solid, into the void for a cavity),
+// so touching shells separate and nested shells stay nested.
+void separate_coincident_vertices(WorkMesh& m, Context& ctx)
+{
+    m.compact_vertices();
+    static const Vec3 axes[6] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, { -1, 0, 0 }, { 0, -1, 0 }, { 0, 0, -1 } };
+    std::vector<char> counted(m.P.size(), 0);
+    // Orientation sign of the shell each vertex belongs to.
+    std::vector<double> shell_sign(m.P.size(), 1.0);
+    {
+        const ShellInfo s = compute_shells(m);
+        for (size_t i = 0; i < s.faces.size(); ++i)
+            if (s.volume[i] < 0.0)
+                for (int f : s.faces[i])
+                    for (int v : m.F[f])
+                        shell_sign[v] = -1.0;
+    }
+    for (int round = 0; round < 4; ++round) {
+        const std::vector<std::vector<int>> groups = float_coincident_groups(m.P);
+        if (groups.empty())
+            return;
+        std::vector<char> affected(m.P.size(), 0);
+        for (const auto& g : groups)
+            for (int v : g)
+                affected[v] = 1;
+        // Area weighted normal and direction towards the fan for each vertex.
+        std::vector<Vec3>   nsum(m.P.size()), csum(m.P.size());
+        std::vector<double> min_edge(m.P.size(), std::numeric_limits<double>::max());
+        for (size_t f = 0; f < m.F.size(); ++f) {
+            const Triangle& t = m.F[f];
+            const Vec3      n = m.normal(f);
+            const Vec3      c = (m.P[t[0]] + m.P[t[1]] + m.P[t[2]]) / 3.0;
+            for (int k = 0; k < 3; ++k) {
+                const int v = t[k];
+                if (!affected[v])
+                    continue;
+                nsum[v] += n;
+                csum[v] += (c - m.P[v]).normalized() * n.norm();
+                // Zero length edges (to another copy at the same position)
+                // do not limit the step, they are what is being fixed.
+                for (int o : { t[(k + 1) % 3], t[(k + 2) % 3] }) {
+                    const double l = (m.P[o] - m.P[v]).norm();
+                    if (l > 0.0)
+                        min_edge[v] = std::min(min_edge[v], l);
+                }
+            }
         }
+        for (const auto& g : groups)
+            for (size_t k = 0; k < g.size(); ++k) {
+                const int v = g[k];
+                // Into the region enclosed by the shell (against the normal
+                // of a solid, along the normal of a cavity).
+                Vec3 d = (nsum[v] * -shell_sign[v]).normalized();
+                if (d.squared_norm() == 0.0)
+                    d = csum[v].normalized();
+                if (round > 0 || d.squared_norm() == 0.0)
+                    d = (d + axes[(k + size_t(round)) % 6] * 0.5).normalized();
+                const Vec3&  p   = m.P[v];
+                const double mag = std::max({ std::abs(p.x), std::abs(p.y), std::abs(p.z), ctx.diag });
+                // Well above float resolution, far below printer resolution.
+                double step = std::max(1e-5 * ctx.diag, 64.0 * mag * double(std::numeric_limits<float>::epsilon()));
+                step        = std::min(step * (round + 1), 0.25 * min_edge[v]);
+                m.P[v] += d * step;
+                if (!counted[v]) {
+                    counted[v] = 1;
+                    ++ctx.stats->vertices_separated;
+                }
+            }
     }
-    for (int v : group_vertices) {
-        const Vec3 d = dir[v].normalized();
-        if (d.squared_norm() == 0.0)
-            continue;
-        const Vec3&  p    = m.P[v];
-        const double mag  = std::max({ std::abs(p.x), std::abs(p.y), std::abs(p.z), ctx.diag });
-        // Well above float resolution, far below printer resolution.
-        double step = std::max(1e-5 * ctx.diag, 64.0 * mag * double(std::numeric_limits<float>::epsilon()));
-        step        = std::min(step, 0.25 * min_edge[v]);
-        m.P[v] += d * step;
-        ++ctx.stats->vertices_separated;
-    }
+}
+
+// The mesh as a slicer sees it after loading an STL: single precision
+// coordinates, identical positions merged.
+Mesh float_welded(const Mesh& mesh)
+{
+    Mesh out = mesh;
+    for (Vec3& p : out.vertices)
+        p = Vec3(double(float(p.x)), double(float(p.y)), double(float(p.z)));
+    merge_identical_vertices(out);
+    return out;
 }
 
 } // namespace
@@ -333,8 +407,10 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
                 if (res.stats.holes_filled == before)
                     break;
                 // Filling never creates non-manifold edges, but face removal
-                // in make_manifold could open new (small) holes.
-                remove_degenerate_and_duplicate_faces(m, ctx);
+                // in make_manifold could open new (small) holes. A filled
+                // single sheet is two opposite copies of the same faces, keep
+                // them (zero volume shells are handled below).
+                remove_degenerate_and_duplicate_faces(m, ctx, false);
                 make_manifold(m, ctx);
             }
         }
@@ -345,6 +421,8 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
         }
 
         report("Orienting shells", 85);
+        if (!m.F.empty() && options.fill_holes)
+            check_has_volume(m, eps);
         remove_shells(m, ctx, eps);
         if (options.orient_outward)
             orient_shells(m, ctx);
@@ -355,6 +433,9 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
         }
 
         m.compact_vertices();
+        if (m.F.empty() && res.before.faces > res.before.invalid_faces)
+            throw std::runtime_error("The model has no volume: it only consists of zero-thickness surfaces "
+                                     "(or of faces that cancel each other out), so no printable solid could be built.");
         for (size_t f = 0; f < m.F.size(); ++f)
             if (m.flipped[f] && m.origin[f] != FaceFilled)
                 ++res.stats.faces_flipped;
@@ -365,7 +446,8 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
         res.face_origin  = std::move(m.origin);
 
         report("Verifying result", 96);
-        res.after   = analyze(mesh);
+        // Verified as written to STL / seen by the slicer.
+        res.after   = analyze(options.separate_coincident_vertices ? float_welded(mesh) : mesh);
         res.success = true;
         report("Done", 100);
     } catch (const Canceled&) {

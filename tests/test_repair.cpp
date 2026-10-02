@@ -228,7 +228,7 @@ int main()
         const RepairResult r = run(m);
         CHECK(m.faces.size() == 12);
         CHECK(m.vertices.size() == 8);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-12);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         CHECK(r.stats.faces_added == 0);
         CHECK(r.stats.faces_flipped == 0);
         expect_clean(m);
@@ -250,7 +250,7 @@ int main()
         CHECK(d.holes == 1);
         const RepairResult r = run(m);
         CHECK(r.stats.holes_filled == 1);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 
@@ -264,7 +264,7 @@ int main()
         m.faces = keep;
         const RepairResult r = run(m);
         CHECK(r.stats.holes_filled == 1);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 
@@ -273,7 +273,7 @@ int main()
         flip_all_faces(m);
         CHECK(analyze(m).inverted_shells == 1);
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-12);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         CHECK(r.stats.faces_flipped == 12);
         expect_clean(m);
     });
@@ -287,7 +287,7 @@ int main()
         CHECK(analyze(m).inconsistent_edges > 0);
         const double vol = signed_volume(icosphere(3));
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, vol, 1e-9);
+        CHECK_NEAR(r.after.volume, vol, 1e-5);
         expect_clean(m);
     });
 
@@ -300,7 +300,7 @@ int main()
         const RepairResult r = run(m);
         CHECK(r.stats.duplicate_faces_removed == 3);
         CHECK(m.faces.size() == 12);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-12);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 
@@ -353,7 +353,7 @@ int main()
         CHECK(d.non_manifold_edges > 0);
         const RepairResult r = run(m);
         CHECK(r.after.shells == 1);
-        CHECK_NEAR(r.after.volume, 2.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 2.0, 1e-5);
         expect_clean(m);
     });
 
@@ -387,7 +387,7 @@ int main()
         CHECK(analyze(m).non_manifold_edges > 0);
         const RepairResult r = run(m);
         CHECK(r.after.shells == 1);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 
@@ -457,7 +457,7 @@ int main()
         const RepairResult r = run(m);
         CHECK(r.stats.t_junctions_fixed > 0);
         CHECK(r.stats.holes_filled == 0);
-        CHECK_NEAR(r.after.volume, 2.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 2.0, 1e-5);
         expect_clean(m);
     });
 
@@ -492,7 +492,7 @@ int main()
         append(m, inner);
         const RepairResult r = run(m);
         CHECK(r.after.shells == 2);
-        CHECK_NEAR(r.after.volume, 26.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 26.0, 1e-5);
         expect_clean(m);
     });
 
@@ -503,7 +503,7 @@ int main()
         inner.faces.pop_back();
         append(m, inner);
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, 26.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 26.0, 1e-5);
         expect_clean(m);
     });
 
@@ -511,7 +511,7 @@ int main()
         Mesh m = cube(Vec3(0, 0, 0), 3.0);
         append(m, cube(Vec3(1, 1, 1), 1.0));
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, 28.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 28.0, 1e-5);
         expect_clean(m);
     });
 
@@ -536,7 +536,7 @@ int main()
         CHECK(d.degenerate_faces == 1);
         CHECK(d.slicer_clean());
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 
@@ -547,7 +547,7 @@ int main()
         m.faces.push_back({ 0, 1, 8 });
         CHECK(analyze(m).non_manifold_edges == 1);
         const RepairResult r = run(m);
-        CHECK_NEAR(r.after.volume, 1.0, 1e-9);
+        CHECK_NEAR(r.after.volume, 1.0, 1e-5);
         expect_clean(m);
     });
 

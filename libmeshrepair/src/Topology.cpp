@@ -74,7 +74,7 @@ size_t weld_vertices(WorkMesh& m, double tol)
 // ---------------------------------------------------------------------------
 // Degenerate and duplicate faces
 
-void remove_degenerate_and_duplicate_faces(WorkMesh& m, Context& ctx)
+void remove_degenerate_and_duplicate_faces(WorkMesh& m, Context& ctx, bool cancel_opposite)
 {
     std::vector<char> remove(m.F.size(), 0);
     size_t            degenerate = 0;
@@ -125,12 +125,17 @@ void remove_degenerate_and_duplicate_faces(WorkMesh& m, Context& ctx)
             int pos = 0, neg = 0;
             for (size_t k = i; k < j; ++k)
                 keys[k].even ? ++pos : ++neg;
-            // Keep a single face of the majority orientation, or nothing on a tie.
-            const int keep_even = pos > neg ? 1 : (neg > pos ? 0 : -1);
-            bool      kept      = false;
+            // Keep a single face of the majority orientation, or nothing on a
+            // tie. Without cancel_opposite one face per orientation is kept.
+            bool keep_even = pos > 0, keep_odd = neg > 0;
+            if (cancel_opposite) {
+                keep_even = pos > neg;
+                keep_odd  = neg > pos;
+            }
             for (size_t k = i; k < j; ++k) {
-                if (!kept && keep_even >= 0 && int(keys[k].even) == keep_even) {
-                    kept = true;
+                bool& keep = keys[k].even ? keep_even : keep_odd;
+                if (keep) {
+                    keep = false;
                     continue;
                 }
                 remove[keys[k].face] = 1;
@@ -318,7 +323,7 @@ std::vector<char> classify_sheets(const WorkMesh& m, const std::vector<EdgeRec>&
 
 void make_manifold(WorkMesh& m, Context& ctx)
 {
-    for (int iter = 0; iter < 64; ++iter) {
+    for (int iter = 0;; ++iter) {
         ctx.check_cancel();
         const size_t nf = m.F.size();
         if (nf == 0)
@@ -456,19 +461,28 @@ void make_manifold(WorkMesh& m, Context& ctx)
                     ++bad;
                 }
             } else if (cnt > 2) {
-                // Keep faces glued to a partner within this group.
-                bool any_kept = false;
-                for (size_t i = b; i < e; ++i) {
+                // Keep one pair of faces that were glued to each other (or the
+                // largest face if there is none), remove the others. Every
+                // pass removes at least one face, so this always terminates.
+                size_t keep_a = e, keep_b = e;
+                for (size_t i = b; i < e && keep_a == e; ++i) {
                     const int partner_face = glued_with[out[i].face * 3 + out[i].corner];
-                    bool      keep         = false;
-                    for (size_t j = b; j < e && !keep; ++j)
-                        keep = j != i && out[j].face == partner_face;
-                    if (!keep)
-                        remove[out[i].face] = 1;
-                    any_kept |= keep;
+                    for (size_t j = i + 1; j < e; ++j)
+                        if (out[j].face == partner_face) {
+                            keep_a = i;
+                            keep_b = j;
+                            break;
+                        }
                 }
-                if (!any_kept)
-                    remove[out[b].face] = 0;
+                if (keep_a == e) {
+                    keep_a = b;
+                    for (size_t i = b + 1; i < e; ++i)
+                        if (m.area(out[i].face) > m.area(out[keep_a].face))
+                            keep_a = i;
+                }
+                for (size_t i = b; i < e; ++i)
+                    if (i != keep_a && i != keep_b)
+                        remove[out[i].face] = 1;
                 ++bad;
             }
         });

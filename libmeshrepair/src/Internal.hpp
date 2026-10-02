@@ -260,8 +260,10 @@ struct Context
 // Merges vertices closer than tol. Returns the number of merged vertices.
 size_t weld_vertices(WorkMesh& m, double tol);
 
-// Removes faces with repeated vertex indices and duplicated faces.
-void remove_degenerate_and_duplicate_faces(WorkMesh& m, Context& ctx);
+// Removes faces with repeated vertex indices and duplicated faces. With
+// cancel_opposite, two copies of a face with opposite orientation remove each
+// other (shared wall of two solids), otherwise one of them is kept.
+void remove_degenerate_and_duplicate_faces(WorkMesh& m, Context& ctx, bool cancel_opposite = true);
 
 // Splits non-manifold edges and vertices, orients faces consistently.
 // On return every edge has at most two faces, which are consistently oriented,

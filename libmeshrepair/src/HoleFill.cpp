@@ -20,6 +20,20 @@ namespace {
 constexpr size_t kMaxDpLoop = 400;
 constexpr double kPi        = 3.14159265358979323846;
 
+struct PosKey
+{
+    Vec3 p;
+    bool operator==(const PosKey& o) const { return p == o.p; }
+};
+struct PosKeyHash
+{
+    size_t operator()(const PosKey& k) const
+    {
+        const std::hash<double> h;
+        return h(k.p.x) ^ (h(k.p.y) * 0x9E3779B97F4A7C15ull) ^ (h(k.p.z) * 0xC2B2AE3D27D4EB4Full);
+    }
+};
+
 struct Loop
 {
     std::vector<int>  verts;  // patch orientation: the patch uses edges verts[i] -> verts[i+1]
@@ -251,6 +265,57 @@ void fill_holes(WorkMesh& m, Context& ctx)
             loops.push_back(std::move(loop));
         else
             ++ctx.stats->holes_left_open;
+    }
+
+    // A loop passing twice through the same point (copies of a vertex split
+    // at a pinch) is split into separate lobes there, and the copies are
+    // joined again: filling the lobes then makes the pinch vertex manifold.
+    // Filling across the pinch instead would create zero length edges.
+    {
+        std::vector<Loop>            simple;
+        std::unordered_map<int, int> merge; // vertex -> representative
+        for (Loop& loop : loops) {
+            std::vector<int>                     stack_v;
+            std::vector<Vec3>                    stack_n;
+            std::unordered_map<PosKey, size_t, PosKeyHash> pos_index;
+            for (size_t i = 0; i < loop.verts.size(); ++i) {
+                const int   v = loop.verts[i];
+                const Vec3& p = m.P[v];
+                size_t      j = stack_v.size();
+                auto        it = pos_index.find(PosKey { p });
+                if (it != pos_index.end() && it->second < stack_v.size() && m.P[stack_v[it->second]] == p)
+                    j = it->second;
+                if (j == stack_v.size()) {
+                    pos_index[PosKey { p }] = stack_v.size();
+                    stack_v.push_back(v);
+                    stack_n.push_back(loop.adj[i]);
+                    continue;
+                }
+                Loop lobe;
+                lobe.verts.assign(stack_v.begin() + long(j), stack_v.end());
+                lobe.adj.assign(stack_n.begin() + long(j), stack_n.end());
+                if (lobe.verts.size() >= 3)
+                    simple.push_back(std::move(lobe));
+                stack_v.resize(j + 1);
+                stack_n.resize(j + 1);
+                stack_n[j] = loop.adj[i]; // continues with the edge leaving v
+                merge[v]   = stack_v[j];
+            }
+            if (stack_v.size() >= 3) {
+                Loop rest;
+                rest.verts = std::move(stack_v);
+                rest.adj   = std::move(stack_n);
+                simple.push_back(std::move(rest));
+            }
+        }
+        if (!merge.empty())
+            for (Triangle& t : m.F)
+                for (int& v : t) {
+                    auto it = merge.find(v);
+                    if (it != merge.end())
+                        v = it->second;
+                }
+        loops.swap(simple);
     }
 
     LoopFiller filler(m.P, edges);

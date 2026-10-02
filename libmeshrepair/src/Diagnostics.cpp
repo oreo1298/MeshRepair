@@ -171,9 +171,9 @@ MeshDiagnostics analyze(const Mesh& mesh, DiagnosticsDetail* detail)
     for (Vec3& p : P)
         if (!p.is_finite())
             p = Vec3();
-    std::vector<double> volumes(shell_faces.size());
+    std::vector<double> volumes(shell_faces.size()), volume_errors(shell_faces.size());
     for (size_t s = 0; s < shell_faces.size(); ++s) {
-        volumes[s] = shell_signed_volume(P, faces, shell_faces[s]);
+        volumes[s] = shell_signed_volume(P, faces, shell_faces[s], &volume_errors[s]);
         d.volume += volumes[s];
     }
 
@@ -193,7 +193,7 @@ MeshDiagnostics analyze(const Mesh& mesh, DiagnosticsDetail* detail)
     // like Bambu Studio, trust the outside view then.
     const std::vector<int> depth = nesting_depths(P, faces, shell_faces, closed);
     for (size_t s = 0; s < shell_faces.size(); ++s)
-        if (closed[s] && depth[s] == 0 && volumes[s] < 0.0 && !(seen_front[s] > 0 && seen_back[s] == 0)) {
+        if (closed[s] && depth[s] == 0 && volumes[s] < -volume_errors[s] && !(seen_front[s] > 0 && seen_back[s] == 0)) {
             ++d.inverted_shells;
             if (detail)
                 for (int f : shell_faces[s])

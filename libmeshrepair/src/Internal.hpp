@@ -259,7 +259,10 @@ std::vector<int> face_components(const std::vector<Triangle>& F, int& num_compon
 std::vector<int> nesting_depths(const std::vector<Vec3>& P, const std::vector<Triangle>& F,
                                 const std::vector<std::vector<int>>& shells, const std::vector<char>& closed);
 
-double shell_signed_volume(const std::vector<Vec3>& P, const std::vector<Triangle>& F, const std::vector<int>& faces);
+// Signed volume of a shell. error_bound receives a bound on the rounding error:
+// a closed shell whose |volume| is below it encloses nothing measurable.
+double shell_signed_volume(const std::vector<Vec3>& P, const std::vector<Triangle>& F, const std::vector<int>& faces,
+                           double* error_bound = nullptr);
 
 // ---------------------------------------------------------------------------
 // Cancellation support.

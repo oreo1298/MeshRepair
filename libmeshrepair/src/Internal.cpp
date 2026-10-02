@@ -1,6 +1,7 @@
 #include "Internal.hpp"
 
 #include <cmath>
+#include <limits>
 #include <memory>
 
 namespace meshrepair {
@@ -420,21 +421,35 @@ std::vector<int> face_components(const std::vector<Triangle>& F, int& num_compon
     return comp;
 }
 
-double shell_signed_volume(const std::vector<Vec3>& P, const std::vector<Triangle>& F, const std::vector<int>& faces)
+double shell_signed_volume(const std::vector<Vec3>& P, const std::vector<Triangle>& F, const std::vector<int>& faces,
+                           double* error_bound)
 {
     BoundingBox bb;
     for (int f : faces)
         for (int v : F[f])
             bb.extend(P[v]);
-    const Vec3 o   = bb.center();
-    double     vol = 0.0;
+    const Vec3 o    = bb.center();
+    double     vol  = 0.0;
+    double     comp = 0.0; // Neumaier compensation
+    double     perm = 0.0; // sum of the magnitudes of all products
     for (int f : faces) {
-        const Vec3 a = P[F[f][0]] - o;
-        const Vec3 b = P[F[f][1]] - o;
-        const Vec3 c = P[F[f][2]] - o;
-        vol += a.dot(b.cross(c));
+        const Vec3   a = P[F[f][0]] - o;
+        const Vec3   b = P[F[f][1]] - o;
+        const Vec3   c = P[F[f][2]] - o;
+        const double t = a.dot(b.cross(c));
+        const double s = vol + t;
+        comp += std::abs(vol) >= std::abs(t) ? (vol - s) + t : (t - s) + vol;
+        vol = s;
+        perm += std::abs(a.x) * (std::abs(b.y * c.z) + std::abs(b.z * c.y)) +
+                std::abs(a.y) * (std::abs(b.z * c.x) + std::abs(b.x * c.z)) +
+                std::abs(a.z) * (std::abs(b.x * c.y) + std::abs(b.y * c.x));
     }
-    return vol / 6.0;
+    // Every triple product is off by a few ulps of its permanent (more or
+    // fewer depending on whether the compiler fuses multiply-adds), so the
+    // copies of a face in a doubled sheet do not cancel exactly.
+    if (error_bound)
+        *error_bound = 16.0 * std::numeric_limits<double>::epsilon() * perm / 6.0;
+    return (vol + comp) / 6.0;
 }
 
 std::vector<int> nesting_depths(const std::vector<Vec3>& P, const std::vector<Triangle>& F,

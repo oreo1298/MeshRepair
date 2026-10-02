@@ -154,7 +154,9 @@ merging vertices by position the way a slicer loads an STL.
   correctly oriented, 55 flat test patches were rejected as having no volume,
   and 8 single open sheets fold over themselves when closed (details in
   [integration/bambustudio](integration/bambustudio/README.md#how-this-was-verified)).
-* CI builds and tests on Arch Linux, Fedora, Debian and Ubuntu, renders the
+* CI builds and tests on Arch Linux, Fedora, Debian and Ubuntu (x86-64 and
+  aarch64), builds the Arch package with `makepkg` using Arch's own compiler
+  flags (with and without FMA, as `-march=native` enables it), renders the
   viewer under Xvfb, and checks the Bambu Studio installer against Bambu
   Studio master every week.
 

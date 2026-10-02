@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: ${{ matrix.distro }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     container: ${{ matrix.image }}
     strategy:
       fail-fast: false
@@ -28,6 +28,11 @@ jobs:
           - distro: Ubuntu 24.04
             image: ubuntu:24.04
             deps: apt-get update && apt-get install -y g++ git cmake ninja-build libglfw3-dev python3 xvfb xauth libgl1-mesa-dri
+          # GCC fuses multiply-adds on aarch64 by default (rounding differs).
+          - distro: Ubuntu 24.04 (aarch64)
+            image: ubuntu:24.04
+            runner: ubuntu-24.04-arm
+            deps: apt-get update && apt-get install -y g++ git cmake ninja-build libglfw3-dev python3
     steps:
       - name: Install dependencies
         run: ${{ matrix.deps }}
@@ -39,17 +44,51 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
       - name: GUI smoke test (software OpenGL)
-        if: matrix.image == 'ubuntu:24.04'
+        if: matrix.distro == 'Ubuntu 24.04'
         run: |
           ./build/apps/cli/meshrepair --version
           printf 'solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 10 0 0\nvertex 0 10 0\nendloop\nendfacet\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 0 10 0\nvertex 0 0 10\nendloop\nendfacet\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 0 0 10\nvertex 10 0 0\nendloop\nendfacet\nendsolid t\n' > open.stl
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" ./build/apps/gui/meshrepair-gui --screenshot shot.png --repair --size 1200x750 open.stl
           test -s shot.png
       - uses: actions/upload-artifact@v4
-        if: matrix.image == 'ubuntu:24.04'
+        if: matrix.distro == 'Ubuntu 24.04'
         with:
           name: gui-screenshot
           path: shot.png
+
+  arch-package:
+    # What "makepkg -si" does on an Arch machine: the PKGBUILD with the
+    # distribution's flags (hardening, LTO, _GLIBCXX_ASSERTIONS) and check().
+    # x86-64-v3 enables FMA like -march=native does on most current CPUs.
+    name: Arch package (makepkg, -march=${{ matrix.march }})
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        march: [x86-64, x86-64-v3]
+    steps:
+      - name: Install dependencies
+        run: pacman -Syu --noconfirm --needed base-devel git cmake ninja glfw
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: makepkg
+        run: |
+          useradd -m builder
+          cp -a . /home/builder/repo
+          cp -r packaging/arch /home/builder/pkg
+          # Build this commit instead of the published default branch.
+          sed -i "s|^source=.*|source=(\"\$_name::git+file:///home/builder/repo#commit=$GITHUB_SHA\")|" /home/builder/pkg/PKGBUILD
+          mkdir -p /home/builder/.config/pacman
+          echo 'CFLAGS="${CFLAGS/-march=x86-64 /-march=${{ matrix.march }} }"' >> /home/builder/.config/pacman/makepkg.conf
+          echo 'CXXFLAGS="${CXXFLAGS/-march=x86-64 /-march=${{ matrix.march }} }"' >> /home/builder/.config/pacman/makepkg.conf
+          chown -R builder: /home/builder
+          su builder -c "cd ~/pkg && makepkg -f --noconfirm"
+      - name: Install and run
+        run: |
+          pacman -U --noconfirm /home/builder/pkg/meshrepair-git-*.pkg.tar.zst
+          meshrepair --version
 
   bambustudio-integration:
     name: Bambu Studio integration (installer against upstream master)

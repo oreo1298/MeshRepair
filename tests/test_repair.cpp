@@ -622,6 +622,23 @@ int main()
         CHECK_NEAR(r.after.volume, 8000.0, 1.0);
     });
 
+    test("far away flat closed sheet counts as zero volume despite rounding", [] {
+        // A closed but flat shell (both sides of a tilted square, split along
+        // different diagonals) far away: its triple products do not cancel
+        // exactly, the computed volume is pure rounding noise.
+        Mesh      m = grid_cube(8, Vec3(0, 0, 0), 20.0);
+        const int b = int(m.vertices.size());
+        for (const auto& xy : { std::make_pair(0.3, 0.1), std::make_pair(0.9, 0.2), std::make_pair(0.8, 0.7),
+                                std::make_pair(0.2, 0.9) })
+            m.vertices.push_back(Vec3(xy.first, xy.second, 0.75 * xy.first + 0.5 * xy.second) * 3.7e29);
+        for (const Triangle& t : { Triangle { 0, 1, 2 }, Triangle { 0, 2, 3 }, Triangle { 0, 3, 1 }, Triangle { 3, 2, 1 } })
+            m.faces.push_back({ b + t[0], b + t[1], b + t[2] });
+        const RepairResult r = run(m);
+        CHECK(r.stats.shells_removed == 1);
+        CHECK(r.after.shells == 1);
+        CHECK_NEAR(r.after.volume, 8000.0, 1.0);
+    });
+
     test("invalid faces and NaN coordinates are dropped", [] {
         Mesh m = cube();
         m.vertices.push_back({ std::nan(""), 0, 0 });

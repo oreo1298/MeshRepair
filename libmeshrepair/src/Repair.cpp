@@ -90,6 +90,7 @@ struct ShellInfo
     std::vector<std::vector<int>> faces;
     std::vector<char>             closed;
     std::vector<double>           volume;
+    std::vector<double>           volume_error; // rounding error bound of volume
     std::vector<double>           area;
 };
 
@@ -109,9 +110,10 @@ ShellInfo compute_shells(const WorkMesh& m)
                 s.closed[comp[recs[i].face]] = 0;
     });
     s.volume.resize(n);
+    s.volume_error.resize(n);
     s.area.assign(n, 0.0);
     for (int i = 0; i < n; ++i) {
-        s.volume[i] = shell_signed_volume(m.P, m.F, s.faces[i]);
+        s.volume[i] = shell_signed_volume(m.P, m.F, s.faces[i], &s.volume_error[i]);
         for (int f : s.faces[i])
             s.area[i] += m.area(size_t(f));
     }
@@ -129,7 +131,7 @@ void orient_shells(WorkMesh& m, Context& ctx)
     for (size_t i = 0; i < s.faces.size(); ++i) {
         ctx.check_cancel();
         const double vol = s.volume[i];
-        if (vol == 0.0)
+        if (std::abs(vol) <= s.volume_error[i])
             continue;
         int desired = 1;
         if (depth[i] > 0) {
@@ -156,8 +158,10 @@ void orient_shells(WorkMesh& m, Context& ctx)
 
 bool is_zero_volume(const ShellInfo& s, size_t i, double thickness_eps)
 {
-    // The "thickness" 2V/A of the closed shell is negligible.
-    return s.closed[i] && 2.0 * std::abs(s.volume[i]) <= thickness_eps * s.area[i];
+    // The "thickness" 2V/A of the closed shell is negligible, or the volume is
+    // just rounding noise (a doubled sheet far away from the origin).
+    const double v = std::abs(s.volume[i]);
+    return s.closed[i] && (2.0 * v <= thickness_eps * s.area[i] || v <= s.volume_error[i]);
 }
 
 // Throws when nothing printable is left: every shell is a closed surface

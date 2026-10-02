@@ -10,7 +10,7 @@ pkgrel=1
 pkgdesc="Repair non-manifold and open meshes (STL/3MF/OBJ) for 3D printing - a Linux replacement for Bambu Studio's Fix model"
 arch=('x86_64' 'aarch64')
 url="https://github.com/oreo1298/MeshRepair"
-license=('unknown')
+license=('MIT')
 depends=('glfw' 'libglvnd' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
 optdepends=('zenity: GTK file dialogs'
             'kdialog: KDE file dialogs')
@@ -41,4 +41,5 @@ check() {
 
 package() {
     DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 "$_name/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

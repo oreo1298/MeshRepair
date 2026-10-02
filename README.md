@@ -16,7 +16,9 @@ You can use it in three ways:
 2. **`meshrepair`**: the same repair on the command line, for batch jobs and
    scripts.
 3. **Inside Bambu Studio**: a small source change that makes *Fix model* work
-   on Linux exactly like on Windows. See
+   on Linux exactly like on Windows. A ready-made Bambu Studio AppImage with it
+   is on the [Releases](https://github.com/oreo1298/MeshRepair/releases) page;
+   to build it yourself, see
    [integration/bambustudio](integration/bambustudio/README.md).
 
 | Before | After |
@@ -187,3 +189,10 @@ integration/bambustudio installer, patch and verification for Bambu Studio
 packaging/              Arch PKGBUILD, desktop entry, icon, AppStream metadata
 third_party/imgui/      Dear ImGui 1.92.9b (MIT license)
 ```
+
+## License
+
+MeshRepair is released under the [MIT license](LICENSE). That makes it usable
+in any slicer, including Bambu Studio, OrcaSlicer and PrusaSlicer, which are
+AGPL-3.0. A Bambu Studio build that includes MeshRepair, like the AppImage on
+the Releases page, is covered by Bambu Studio's AGPL-3.0 as a whole.

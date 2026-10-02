@@ -192,6 +192,7 @@ def install_files(t: Tree):
     if dst.exists():
         shutil.rmtree(dst)
     shutil.copytree(LIBRARY, dst, ignore=shutil.ignore_patterns("build*", "*.o", "*.a"))
+    shutil.copyfile(REPO / "LICENSE", dst / "LICENSE")
     shutil.copyfile(BACKEND, backend)
 
 

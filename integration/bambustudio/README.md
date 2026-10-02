@@ -24,6 +24,17 @@ repaired mesh; older versions clear them.
 
 Windows builds with the SDK still use the SDK. Nothing changes for them.
 
+## Ready-made AppImage
+
+The [Releases](https://github.com/oreo1298/MeshRepair/releases) page has an
+unofficial Bambu Studio AppImage with this change built in. It runs on any
+x86-64 distribution. Download it, `chmod +x` it and run it. The release notes
+list what it needs from your system and link its complete source. It's built
+by the [Bambu Studio AppImage](../../.github/workflows/bambustudio-appimage.yml)
+workflow with the same steps as Bambu Studio's own CI. To build it in your own
+fork, run that workflow from the Actions tab. The rest of this page is about
+building it yourself.
+
 ## Supported versions
 
 Bambu Studio **02.07 and newer**. The installer has been checked on

@@ -4,6 +4,7 @@
   <name>MeshRepair</name>
   <summary>Repair non-manifold and open meshes for 3D printing</summary>
   <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
   <description>
     <p>
       MeshRepair finds and fixes the problems slicers complain about: open edges (holes and

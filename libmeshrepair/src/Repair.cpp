@@ -389,7 +389,8 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
         for (const Triangle& t : m.F)
             for (int v : t)
                 bb.extend(m.P[v]);
-        const double diag = bb.valid() ? bb.diagonal() : 0.0;
+        // Robust size: stray far away vertices must not blow up tolerances.
+        const double diag = bb.valid() ? std::min(bb.diagonal(), model_scale(m.P, m.F)) : 0.0;
 
         Context ctx;
         ctx.options    = &options;

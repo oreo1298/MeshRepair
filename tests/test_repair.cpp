@@ -595,6 +595,33 @@ int main()
         }
     });
 
+    test("stray far away vertices do not blow up tolerances", [] {
+        // A real model with a crack, plus garbage triangles with absurd
+        // coordinates (as in corrupted files): must stay fast and still fix
+        // the real model.
+        Mesh m = grid_cube(8, Vec3(0, 0, 0), 20.0);
+        m.faces.erase(m.faces.begin() + 10);
+        std::mt19937                           rng(17);
+        std::uniform_real_distribution<double> u(-1, 1);
+        for (int i = 0; i < 200; ++i) {
+            const int b = int(m.vertices.size());
+            for (int k = 0; k < 3; ++k)
+                m.vertices.push_back(Vec3(u(rng), u(rng), u(rng)) * 1e30);
+            m.faces.push_back({ b, b + 1, b + 2 });
+        }
+        const auto         t0  = std::chrono::steady_clock::now();
+        const RepairResult r   = run(m);
+        const double       sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        CHECK(sec < 10.0);
+        CHECK(r.stats.holes_filled >= 1);
+        // Tolerances follow the real model (20 mm cube), not the garbage.
+        CHECK(r.weld_tolerance_used < 0.01);
+        CHECK(r.stitch_tolerance_used < 1.0);
+        // The garbage sheets are gone, the cube is closed again.
+        CHECK(r.after.open_edges == 0);
+        CHECK_NEAR(r.after.volume, 8000.0, 1.0);
+    });
+
     test("invalid faces and NaN coordinates are dropped", [] {
         Mesh m = cube();
         m.vertices.push_back({ std::nan(""), 0, 0 });

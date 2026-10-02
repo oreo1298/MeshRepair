@@ -70,8 +70,15 @@ void for_each_close_pair(const std::vector<Vec3>& pts, const std::vector<int>& i
     };
     std::vector<std::pair<CellKey, int>> cells;
     cells.reserve(ids.size());
-    for (int i : ids)
-        cells.push_back({ key(pts[i]), i });
+    // Points whose cell index would not fit into 64 bits (absurd coordinates
+    // relative to the tolerance, e.g. garbage in a corrupted file) are skipped.
+    constexpr double kLimit = 1e15;
+    for (int i : ids) {
+        const Vec3& p = pts[i];
+        if (!(std::abs(p.x * inv) < kLimit && std::abs(p.y * inv) < kLimit && std::abs(p.z * inv) < kLimit))
+            continue;
+        cells.push_back({ key(p), i });
+    }
     std::sort(cells.begin(), cells.end(), [](const auto& a, const auto& b) {
         if (!(a.first == b.first))
             return a.first < b.first;
@@ -106,6 +113,68 @@ void for_each_close_pair(const std::vector<Vec3>& pts, const std::vector<int>& i
                     }
                 }
     }
+}
+
+double robust_diagonal(const std::vector<Vec3>& P, const std::vector<Triangle>& F)
+{
+    std::vector<char> used(P.size(), 0);
+    for (const Triangle& t : F)
+        for (int v : t)
+            if (v >= 0 && size_t(v) < P.size() && P[v].is_finite())
+                used[v] = 1;
+    std::vector<int> ids;
+    for (size_t v = 0; v < P.size(); ++v)
+        if (used[v])
+            ids.push_back(int(v));
+    if (ids.empty())
+        return 0.0;
+    // Large meshes: a regular sample is plenty.
+    const size_t max_samples = 200000;
+    if (ids.size() > max_samples) {
+        std::vector<int> sample;
+        sample.reserve(max_samples);
+        for (size_t i = 0; i < max_samples; ++i)
+            sample.push_back(ids[i * ids.size() / max_samples]);
+        ids.swap(sample);
+    }
+    const size_t     n  = ids.size();
+    const size_t     lo = n / 200;            // 0.5 %
+    const size_t     hi = n - 1 - n / 200;    // 99.5 %
+    std::vector<double> c(n);
+    Vec3             d;
+    for (int a = 0; a < 3; ++a) {
+        for (size_t i = 0; i < n; ++i)
+            c[i] = P[ids[i]][a];
+        std::nth_element(c.begin(), c.begin() + long(lo), c.end());
+        const double vmin = c[lo];
+        std::nth_element(c.begin(), c.begin() + long(hi), c.end());
+        d[a] = c[hi] - vmin;
+    }
+    return d.norm();
+}
+
+double model_scale(const std::vector<Vec3>& P, const std::vector<Triangle>& F)
+{
+    const double diag = robust_diagonal(P, F);
+    std::vector<double> len;
+    const size_t        step = std::max<size_t>(1, F.size() / 100000);
+    for (size_t f = 0; f < F.size(); f += step) {
+        const Triangle& t = F[f];
+        bool            ok = true;
+        for (int v : t)
+            ok &= v >= 0 && size_t(v) < P.size() && P[v].is_finite();
+        if (!ok)
+            continue;
+        for (int k = 0; k < 3; ++k) {
+            const double l = (P[t[(k + 1) % 3]] - P[t[k]]).norm();
+            if (l > 0.0 && std::isfinite(l))
+                len.push_back(l);
+        }
+    }
+    if (len.empty())
+        return diag;
+    std::nth_element(len.begin(), len.begin() + long(len.size() / 2), len.end());
+    return std::min(diag, 1000.0 * len[len.size() / 2]);
 }
 
 size_t WorkMesh::remove_faces(const std::vector<char>& remove)

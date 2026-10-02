@@ -46,7 +46,7 @@ MeshDiagnostics analyze(const Mesh& mesh, DiagnosticsDetail* detail)
     }
 
     // Zero area faces with distinct vertices (caps / needles).
-    const double diag     = d.bbox.diagonal();
+    const double diag     = std::min(d.bbox.diagonal(), model_scale(mesh.vertices, faces));
     const double h_thresh = diag * 1e-6;
     for (size_t k = 0; k < faces.size(); ++k) {
         const Vec3&  a  = mesh.vertices[faces[k][0]];

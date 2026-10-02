@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <functional>
 #include <numeric>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -97,6 +98,17 @@ inline uint64_t directed_edge_key(int a, int b) { return (uint64_t(uint32_t(a)) 
 inline int corner_of(const Triangle& f, int v) { return f[0] == v ? 0 : (f[1] == v ? 1 : (f[2] == v ? 2 : -1)); }
 
 // ---------------------------------------------------------------------------
+// Size of the model for relative tolerances: the diagonal of the bounding box
+// of the referenced vertices, ignoring the most extreme 0.5 % on every axis so
+// that a few stray vertices far away do not blow up all tolerances.
+double robust_diagonal(const std::vector<Vec3>& P, const std::vector<Triangle>& F);
+
+// Model size used for all relative tolerances: the robust diagonal, but at
+// most 1000 median edge lengths, which stays meaningful even when a large
+// part of the file is garbage (e.g. a corrupted STL).
+double model_scale(const std::vector<Vec3>& P, const std::vector<Triangle>& F);
+
+// ---------------------------------------------------------------------------
 // Spatial hashing: calls fn(i, j, distance) for every pair of points i < j
 // (taken from ids) closer than tol. tol must be positive.
 void for_each_close_pair(const std::vector<Vec3>& pts, const std::vector<int>& ids, double tol,
@@ -150,7 +162,8 @@ public:
     void build(std::vector<BoundingBox> boxes);
     bool empty() const { return m_nodes.empty(); }
 
-    // visit(prim) for every primitive whose box overlaps the query box.
+    // visit(prim) for every primitive whose box overlaps the query box. If
+    // visit returns bool, returning false stops the query.
     template<class Fn>
     void query_box(const BoundingBox& box, Fn&& visit) const
     {
@@ -165,8 +178,13 @@ public:
                 continue;
             if (n.left < 0) {
                 for (int i = n.begin; i < n.end; ++i)
-                    if (m_boxes[m_prims[i]].intersects(box))
-                        visit(m_prims[i]);
+                    if (m_boxes[m_prims[i]].intersects(box)) {
+                        if constexpr (std::is_same_v<decltype(visit(0)), bool>) {
+                            if (!visit(m_prims[i]))
+                                return;
+                        } else
+                            visit(m_prims[i]);
+                    }
             } else {
                 stack[sp++] = n.left;
                 stack[sp++] = n.right;

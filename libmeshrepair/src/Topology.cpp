@@ -35,7 +35,27 @@ static UnionFind cluster_points(const std::vector<Vec3>& pts, const std::vector<
                 uf.unite(order[i], order[i - 1]);
         return uf;
     }
-    for_each_close_pair(pts, ids, tol, [&](int i, int j, double) { uf.unite(i, j); });
+    // Identical positions first (sorting), so that heaps of coincident points
+    // do not make the grid search quadratic; then the grid on unique points.
+    std::vector<int> order(ids);
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        const Vec3& p = pts[a];
+        const Vec3& q = pts[b];
+        if (p.x != q.x)
+            return p.x < q.x;
+        if (p.y != q.y)
+            return p.y < q.y;
+        return p.z < q.z;
+    });
+    std::vector<int> unique;
+    unique.reserve(order.size());
+    for (size_t i = 0; i < order.size(); ++i) {
+        if (i > 0 && pts[order[i]] == pts[order[i - 1]])
+            uf.unite(order[i], order[i - 1]);
+        else
+            unique.push_back(order[i]);
+    }
+    for_each_close_pair(pts, unique, tol, [&](int i, int j, double) { uf.unite(i, j); });
     return uf;
 }
 

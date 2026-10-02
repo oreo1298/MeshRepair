@@ -52,36 +52,52 @@ size_t split_t_junctions(WorkMesh& m, double tol)
         double t;
         int    v;
     };
+    // A vertex close to many boundary edges is ambiguous (or the tolerance is
+    // far too large for this mesh): such vertices are left alone, and the
+    // total amount of work is bounded.
+    constexpr size_t   kMaxCandidates = 16;
+    const size_t       max_splits     = 4 * bnd.size() + 64;
     std::vector<Split> splits;
+    std::vector<Split> local;
     for (size_t v = 0; v < m.P.size(); ++v) {
         if (!is_bv[v])
             continue;
         const Vec3& p = m.P[v];
         BoundingBox q;
         q.extend(p);
-        tree.query_box(q, [&](int k) {
+        local.clear();
+        size_t candidates = 0;
+        tree.query_box(q, [&](int k) -> bool {
+            if (++candidates > kMaxCandidates)
+                return false;
             const EdgeRec&  r = recs[bnd[k]];
             const Triangle& t = m.F[r.face];
             if (corner_of(t, int(v)) >= 0)
-                return;
+                return true;
             const int a = t[r.corner];
             const int b = t[(r.corner + 1) % 3];
             if (m.vorig[v] == m.vorig[a] || m.vorig[v] == m.vorig[b])
-                return;
+                return true;
             const Vec3   ab = m.P[b] - m.P[a];
             const double l2 = ab.squared_norm();
             if (!(l2 > 0.0))
-                return;
+                return true;
             const double tt = (p - m.P[a]).dot(ab) / l2;
             if (tt <= 0.0 || tt >= 1.0)
-                return;
+                return true;
             // Vertex to vertex proximity is handled by merging.
             if ((p - m.P[a]).norm() <= tol || (p - m.P[b]).norm() <= tol)
-                return;
+                return true;
             if ((p - (m.P[a] + ab * tt)).norm() > tol)
-                return;
-            splits.push_back({ r.face, r.corner, tt, int(v) });
+                return true;
+            local.push_back({ r.face, r.corner, tt, int(v) });
+            return true;
         });
+        if (candidates > kMaxCandidates)
+            continue;
+        splits.insert(splits.end(), local.begin(), local.end());
+        if (splits.size() > max_splits)
+            return 0;
     }
     if (splits.empty())
         return 0;
@@ -187,12 +203,19 @@ size_t merge_boundary_vertices(WorkMesh& m, double tol)
         int    a, b;
         double d;
     };
+    // A crack pairs every boundary vertex with only a few others; far more
+    // pairs mean the tolerance is too large for this mesh: do nothing then.
     std::vector<Pair> pairs;
+    const size_t      max_pairs = 8 * ids.size() + 64;
+    bool              too_many  = false;
     for_each_close_pair(m.P, ids, tol, [&](int a, int b, double d) {
+        if (too_many)
+            return;
         if (m.vorig[a] != m.vorig[b] || rejoins_edge(a, b))
             pairs.push_back({ a, b, d });
+        too_many = pairs.size() > max_pairs;
     });
-    if (pairs.empty())
+    if (pairs.empty() || too_many)
         return 0;
     std::sort(pairs.begin(), pairs.end(), [](const Pair& x, const Pair& y) {
         if (x.d != y.d)

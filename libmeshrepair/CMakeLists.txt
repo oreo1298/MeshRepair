@@ -8,6 +8,7 @@ add_library(meshrepair STATIC
     src/Repair.cpp
     src/IO.cpp
     src/IO3MF.cpp
+    src/Zip.cpp
 )
 target_include_directories(meshrepair PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

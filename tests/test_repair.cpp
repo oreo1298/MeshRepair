@@ -649,6 +649,43 @@ int main()
         std::remove(path.c_str());
     });
 
+    test("3MF round trip (multiple objects, names, split vertices kept)", [] {
+        std::vector<NamedMesh> objs;
+        objs.push_back({ "Cube & <friends>", cube() });
+        Mesh two = cube();
+        append(two, cube(Vec3(1, 1, 0)));
+        merge_identical_vertices(two);
+        repair(two);
+        objs.push_back({ "Repaired pair", two });
+        std::string       err;
+        const std::string path = tmp_path("rt.3mf");
+        CHECK(save_3mf(path, objs, err));
+        std::vector<NamedMesh> back;
+        CHECK(load_3mf(path, back, err));
+        CHECK(back.size() == 2);
+        if (back.size() == 2) {
+            CHECK(back[0].name == "Cube & <friends>");
+            CHECK(back[1].name == "Repaired pair");
+            CHECK(back[1].mesh.vertices.size() == two.vertices.size());
+            CHECK(back[1].mesh.faces == two.faces);
+            CHECK(analyze(back[1].mesh).slicer_clean());
+            CHECK_NEAR(signed_volume(back[0].mesh), 1.0, 1e-6);
+        }
+        std::remove(path.c_str());
+    });
+
+    test("3MF loader errors are reported", [] {
+        std::vector<NamedMesh> objs;
+        std::string            err;
+        const std::string      path = tmp_path("bad.3mf");
+        FILE*                  f    = std::fopen(path.c_str(), "wb");
+        std::fputs("this is not a zip file at all, just some text that is long enough", f);
+        std::fclose(f);
+        CHECK(!load_3mf(path, objs, err));
+        CHECK(!err.empty());
+        std::remove(path.c_str());
+    });
+
     test("large mesh performance (330k faces, holes, flips)", [] {
         Mesh         m = icosphere(7);
         std::mt19937 rng(99);

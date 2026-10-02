@@ -79,6 +79,7 @@ std::string json_escape(const std::string& s)
 std::string json_diag(const MeshDiagnostics& d)
 {
     std::ostringstream ss;
+    ss.precision(12);
     ss << "{\"vertices\":" << d.vertices << ",\"faces\":" << d.faces << ",\"shells\":" << d.shells
        << ",\"open_edges\":" << d.open_edges << ",\"holes\":" << d.holes
        << ",\"non_manifold_edges\":" << d.non_manifold_edges

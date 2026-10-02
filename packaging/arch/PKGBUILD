@@ -1,0 +1,44 @@
+# PKGBUILD for MeshRepair (standalone viewer + command line tool).
+# Build and install with:  makepkg -si
+# The Bambu Studio integration ("Fix model" inside Bambu Studio) is a separate
+# step, see integration/bambustudio/README.md.
+
+pkgname=meshrepair-git
+_name=MeshRepair
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Repair non-manifold and open meshes (STL/3MF/OBJ) for 3D printing - a Linux replacement for Bambu Studio's Fix model"
+arch=('x86_64' 'aarch64')
+url="https://github.com/oreo1298/MeshRepair"
+license=('unknown')
+depends=('glfw' 'libglvnd' 'gcc-libs' 'glibc' 'hicolor-icon-theme')
+optdepends=('zenity: GTK file dialogs'
+            'kdialog: KDE file dialogs')
+makedepends=('git' 'cmake' 'ninja')
+provides=('meshrepair')
+conflicts=('meshrepair')
+source=("$_name::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_name"
+    local base
+    base=$(sed -n 's/^project(MeshRepair VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+    printf "%s.r%s.g%s" "$base" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cmake -S "$_name" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DMESHREPAIR_FETCH_GLFW=OFF
+    cmake --build build
+}
+
+check() {
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

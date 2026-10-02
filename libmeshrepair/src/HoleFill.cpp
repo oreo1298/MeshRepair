@@ -319,10 +319,8 @@ void fill_holes(WorkMesh& m, Context& ctx)
     }
 
     LoopFiller filler(m.P, edges);
-    size_t     done = 0;
     for (const Loop& loop : loops) {
         ctx.check_cancel();
-        ++done;
         if (ctx.options->max_hole_edges > 0 && loop.verts.size() > ctx.options->max_hole_edges) {
             ++ctx.stats->holes_left_open;
             continue;

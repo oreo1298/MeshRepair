@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1" # weekly: catch Bambu Studio upstream changes
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: Arch Linux
+            image: archlinux:latest
+            deps: pacman -Syu --noconfirm --needed base-devel git cmake ninja glfw python
+          - distro: Fedora
+            image: fedora:latest
+            deps: dnf install -y gcc-c++ git cmake ninja-build glfw-devel python3
+          - distro: Debian 12
+            image: debian:12
+            deps: apt-get update && apt-get install -y g++ git cmake ninja-build libglfw3-dev python3
+          - distro: Ubuntu 24.04
+            image: ubuntu:24.04
+            deps: apt-get update && apt-get install -y g++ git cmake ninja-build libglfw3-dev python3 xvfb xauth libgl1-mesa-dri
+    steps:
+      - name: Install dependencies
+        run: ${{ matrix.deps }}
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMESHREPAIR_FETCH_GLFW=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: GUI smoke test (software OpenGL)
+        if: matrix.image == 'ubuntu:24.04'
+        run: |
+          ./build/apps/cli/meshrepair --version
+          printf 'solid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 10 0 0\nvertex 0 10 0\nendloop\nendfacet\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 0 10 0\nvertex 0 0 10\nendloop\nendfacet\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 0 0 10\nvertex 10 0 0\nendloop\nendfacet\nendsolid t\n' > open.stl
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x800x24" ./build/apps/gui/meshrepair-gui --screenshot shot.png --repair --size 1200x750 open.stl
+          test -s shot.png
+      - uses: actions/upload-artifact@v4
+        if: matrix.image == 'ubuntu:24.04'
+        with:
+          name: gui-screenshot
+          path: shot.png
+
+  bambustudio-integration:
+    name: Bambu Studio integration (installer against upstream master)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Bambu Studio sources
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/bambulab/BambuStudio.git bambu
+          cd bambu
+          git sparse-checkout set --no-cone /CMakeLists.txt /src/CMakeLists.txt /src/libslic3r/CMakeLists.txt \
+            /src/libslic3r/Win10ModelRepair.hpp /src/slic3r/Utils/ /src/slic3r/GUI/Gizmos/GLGizmoAdvancedCut.cpp \
+            '/src/slic3r/GUI/TextureImportDialog.*' /src/admesh/ /src/eigen/
+      - name: Run the installer
+        run: python3 integration/bambustudio/install.py bambu
+      - name: Compile the MeshRepair backend against Bambu Studio headers
+        run: |
+          sudo apt-get update && sudo apt-get install -y libboost-log-dev
+          g++ -std=c++17 -fsyntax-only -DHAS_MESHREPAIR -DHAS_MODEL_REPAIR -DBOOST_LOG_DYN_LINK \
+            -Ibambu/src -Ibambu/src/libslic3r -Ibambu/src/eigen -Ibambu/src/meshrepair/include \
+            bambu/src/libslic3r/MeshRepairFix.cpp

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4250"/>
+      <stop offset="1" stop-color="#1f242c"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#bg)"/>
+  <!-- A low poly solid -->
+  <g stroke="#dfe6f0" stroke-width="2.5" stroke-linejoin="round">
+    <polygon points="64,18 104,40 64,62 24,40" fill="#9fb0c8"/>
+    <polygon points="24,40 64,62 64,108 24,86" fill="#7c8ca5"/>
+    <polygon points="104,40 64,62 64,108 104,86" fill="#5f6e86"/>
+    <line x1="24" y1="40" x2="64" y2="108"/>
+    <line x1="104" y1="40" x2="64" y2="62"/>
+  </g>
+  <!-- The patched hole -->
+  <polygon points="72,70 96,57 96,80" fill="#00ae42" stroke="#dfe6f0" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- Check mark badge -->
+  <circle cx="98" cy="98" r="20" fill="#00ae42" stroke="#1f242c" stroke-width="4"/>
+  <polyline points="88,98 95,105 109,90" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

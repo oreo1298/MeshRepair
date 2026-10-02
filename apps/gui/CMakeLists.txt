@@ -60,3 +60,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 install(TARGETS meshrepair-gui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Desktop integration: menu entry, "Open with" for STL / 3MF / OBJ, icon.
+set(MESHREPAIR_APP_ID io.github.oreo1298.MeshRepair)
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/${MESHREPAIR_APP_ID}.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/${MESHREPAIR_APP_ID}.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/${MESHREPAIR_APP_ID}.metainfo.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)

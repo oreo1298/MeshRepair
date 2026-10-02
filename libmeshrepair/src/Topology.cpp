@@ -323,7 +323,9 @@ std::vector<char> classify_sheets(const WorkMesh& m, const std::vector<EdgeRec>&
 
 void make_manifold(WorkMesh& m, Context& ctx)
 {
-    for (int iter = 0;; ++iter) {
+    // Repeats until the result is manifold; every repetition removes faces,
+    // so this terminates.
+    for (;;) {
         ctx.check_cancel();
         const size_t nf = m.F.size();
         if (nf == 0)

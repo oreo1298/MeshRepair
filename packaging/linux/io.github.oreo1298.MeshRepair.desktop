@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=MeshRepair
+GenericName=3D Mesh Repair
+Comment=Repair non-manifold and open meshes (STL, 3MF, OBJ) for 3D printing
+Exec=meshrepair-gui %f
+Icon=io.github.oreo1298.MeshRepair
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=STL;3MF;OBJ;mesh;repair;manifold;3D printing;slicer;Bambu;netfabb;
+MimeType=model/stl;model/x.stl-ascii;model/x.stl-binary;application/sla;model/3mf;application/vnd.ms-3mfdocument;model/obj;
+StartupWMClass=MeshRepair

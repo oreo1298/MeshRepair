@@ -1,3 +1,5 @@
+include(GNUInstallDirs)
+
 add_library(meshrepair STATIC
     src/Mesh.cpp
     src/Diagnostics.cpp

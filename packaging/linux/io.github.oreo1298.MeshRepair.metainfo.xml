@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.oreo1298.MeshRepair</id>
+  <name>MeshRepair</name>
+  <summary>Repair non-manifold and open meshes for 3D printing</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <description>
+    <p>
+      MeshRepair finds and fixes the problems slicers complain about: open edges (holes and
+      cracks), non-manifold edges and vertices, flipped normals and inside-out parts, duplicate
+      and degenerate faces. It is an open replacement for the Windows-only "Fix model" function
+      of Bambu Studio, OrcaSlicer and PrusaSlicer, and can hand the repaired model straight to
+      the slicer.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.oreo1298.MeshRepair.desktop</launchable>
+  <url type="homepage">https://github.com/oreo1298/MeshRepair</url>
+  <provides>
+    <binary>meshrepair-gui</binary>
+    <binary>meshrepair</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+</component>

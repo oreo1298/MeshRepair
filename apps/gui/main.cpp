@@ -48,7 +48,6 @@ const std::vector<FileFilter> kSaveFilters { { "STL", { "stl" } }, { "3MF", { "3
 
 const ImVec4 kRed(0.95f, 0.36f, 0.36f, 1.0f);
 const ImVec4 kGreen(0.35f, 0.85f, 0.45f, 1.0f);
-const ImVec4 kYellow(0.98f, 0.82f, 0.25f, 1.0f);
 const ImVec4 kDim(0.62f, 0.65f, 0.70f, 1.0f);
 
 double now_seconds()
@@ -288,6 +287,12 @@ bool App::init(int argc, char** argv)
     glfwWindowHint(GLFW_SAMPLES, 4);
     if (!m_screenshot.empty())
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    // Lets the desktop match the window to io.github.oreo1298.MeshRepair.desktop (icon, name).
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, "MeshRepair");
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "meshrepair");
+#ifdef GLFW_WAYLAND_APP_ID
+    glfwWindowHintString(GLFW_WAYLAND_APP_ID, "io.github.oreo1298.MeshRepair");
+#endif
     if (width <= 0 || height <= 0) {
         width  = int(m_settings.get_double("window.width", 1360 * m_scale));
         height = int(m_settings.get_double("window.height", 860 * m_scale));

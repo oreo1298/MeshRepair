@@ -177,11 +177,23 @@ MeshDiagnostics analyze(const Mesh& mesh, DiagnosticsDetail* detail)
         d.volume += volumes[s];
     }
 
+    // Same test as Bambu Studio, for closed meshes only: rays from outside
+    // must hit front faces first.
+    std::vector<int> seen_front(shell_faces.size(), 0), seen_back(shell_faces.size(), 0);
+    if (d.open_edges == 0 && d.non_manifold_edges == 0 && d.inconsistent_edges == 0 && !faces.empty()) {
+        std::vector<std::pair<int, bool>> hits;
+        d.visible_back_faces = size_t(visible_back_faces(P, faces, &hits));
+        for (const auto& h : hits)
+            (h.second ? seen_back : seen_front)[shell_of[h.first]]++;
+    }
+
     // Inverted shells: closed outermost shells with negative volume. Nested
-    // shells may legitimately be inverted (cavities).
+    // shells may legitimately be inverted (cavities). A self intersecting
+    // shell can have a negative volume and still look right from the outside;
+    // like Bambu Studio, trust the outside view then.
     const std::vector<int> depth = nesting_depths(P, faces, shell_faces, closed);
     for (size_t s = 0; s < shell_faces.size(); ++s)
-        if (closed[s] && depth[s] == 0 && volumes[s] < 0.0) {
+        if (closed[s] && depth[s] == 0 && volumes[s] < 0.0 && !(seen_front[s] > 0 && seen_back[s] == 0)) {
             ++d.inverted_shells;
             if (detail)
                 for (int f : shell_faces[s])

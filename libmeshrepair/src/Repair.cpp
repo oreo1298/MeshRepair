@@ -173,6 +173,35 @@ void check_has_volume(const WorkMesh& m, double thickness_eps)
                              "If the surfaces are separated by gaps, try a larger crack tolerance.");
 }
 
+// Final check from the outside, like Bambu Studio does: a shell that is only
+// ever seen from behind is inside out (e.g. a "cavity" that is not enclosed
+// after all), so it is flipped. Shells seen from both sides fold over
+// themselves; flipping them would not help, they are left alone.
+void flip_shells_seen_from_behind(WorkMesh& m, Context& ctx)
+{
+    for (int pass = 0; pass < 3; ++pass) {
+        std::vector<std::pair<int, bool>> hits;
+        if (visible_back_faces(m.P, m.F, &hits) == 0)
+            return;
+        int              n    = 0;
+        std::vector<int> comp = face_components(m.F, n, false);
+        std::vector<int> back(n, 0), front(n, 0);
+        for (const auto& h : hits)
+            (h.second ? back : front)[comp[h.first]]++;
+        bool changed = false;
+        for (int c = 0; c < n; ++c)
+            if (back[c] > 0 && front[c] == 0) {
+                for (size_t f = 0; f < m.F.size(); ++f)
+                    if (comp[f] == c)
+                        m.flip_face(f);
+                ++ctx.stats->shells_reoriented;
+                changed = true;
+            }
+        if (!changed)
+            return;
+    }
+}
+
 void remove_shells(WorkMesh& m, Context& ctx, double thickness_eps)
 {
     const RepairOptions& opt = *ctx.options;
@@ -424,8 +453,10 @@ RepairResult repair(Mesh& mesh, const RepairOptions& options, const ProgressFn& 
         if (!m.F.empty() && options.fill_holes)
             check_has_volume(m, eps);
         remove_shells(m, ctx, eps);
-        if (options.orient_outward)
+        if (options.orient_outward) {
             orient_shells(m, ctx);
+            flip_shells_seen_from_behind(m, ctx);
+        }
 
         if (options.separate_coincident_vertices) {
             report("Separating touching shells", 92);
@@ -472,6 +503,7 @@ std::string format_diagnostics(const MeshDiagnostics& d)
     line("non-manifold vertices", d.non_manifold_vertices);
     line("inconsistently oriented edges", d.inconsistent_edges);
     line("inverted shells", d.inverted_shells);
+    line("views seeing a back face first (Bambu ray test)", d.visible_back_faces);
     line("degenerate faces", d.degenerate_faces);
     line("duplicate faces", d.duplicate_faces);
     if (d.invalid_faces)

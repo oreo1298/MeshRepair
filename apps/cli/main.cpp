@@ -85,6 +85,7 @@ std::string json_diag(const MeshDiagnostics& d)
        << ",\"non_manifold_edges\":" << d.non_manifold_edges
        << ",\"non_manifold_vertices\":" << d.non_manifold_vertices
        << ",\"inconsistent_edges\":" << d.inconsistent_edges << ",\"inverted_shells\":" << d.inverted_shells
+       << ",\"visible_back_faces\":" << d.visible_back_faces
        << ",\"degenerate_faces\":" << d.degenerate_faces << ",\"duplicate_faces\":" << d.duplicate_faces
        << ",\"invalid_faces\":" << d.invalid_faces << ",\"volume\":" << d.volume << ",\"area\":" << d.area
        << ",\"watertight\":" << (d.watertight() ? "true" : "false")

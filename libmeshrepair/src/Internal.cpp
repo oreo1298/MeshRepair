@@ -217,7 +217,8 @@ bool AABBTree::ray_hits_box(const Vec3& o, const Vec3& inv, const BoundingBox& b
     return true;
 }
 
-bool ray_triangle(const Vec3& o, const Vec3& d, const Vec3& a, const Vec3& b, const Vec3& c, double tmin, double& t)
+bool ray_triangle(const Vec3& o, const Vec3& d, const Vec3& a, const Vec3& b, const Vec3& c, double tmin, double& t,
+                  double* u_out, double* v_out)
 {
     const Vec3   e1  = b - a;
     const Vec3   e2  = c - a;
@@ -235,7 +236,96 @@ bool ray_triangle(const Vec3& o, const Vec3& d, const Vec3& a, const Vec3& b, co
     if (v < 0.0 || u + v > 1.0)
         return false;
     t = e2.dot(q) * inv;
+    if (u_out)
+        *u_out = u;
+    if (v_out)
+        *v_out = v;
     return t > tmin;
+}
+
+int visible_back_faces(const std::vector<Vec3>& P, const std::vector<Triangle>& F,
+                       std::vector<std::pair<int, bool>>* face_hits)
+{
+    if (F.empty())
+        return 0;
+    BoundingBox bb;
+    for (const Triangle& t : F)
+        for (int v : t)
+            bb.extend(P[v]);
+    const Vec3   center = bb.center();
+    const Vec3   extent = bb.size();
+    const double radius = 0.5 * extent.norm();
+    if (!(radius > 0.0))
+        return 0;
+    const double max_ext  = std::max({ extent.x, extent.y, extent.z });
+    const double standoff = radius + std::max(max_ext * 0.05, 1.0);
+
+    std::vector<Vec3> dirs;
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+            for (int z = -1; z <= 1; ++z)
+                if (x || y || z)
+                    dirs.emplace_back(x, y, z);
+    constexpr int    extra  = 20;
+    constexpr double golden = 2.399963229728653;
+    for (int i = 0; i < extra; ++i) {
+        const double y   = 1.0 - 2.0 * (i + 0.5) / extra;
+        const double r   = std::sqrt(std::max(0.0, 1.0 - y * y));
+        const double phi = i * golden;
+        dirs.emplace_back(r * std::cos(phi), y, r * std::sin(phi));
+    }
+
+    constexpr double graze         = 0.08;
+    constexpr double backface      = 1e-4;
+    constexpr double bary_eps      = 0.02;
+    const double     coincident_t  = radius * 1e-4;
+    const double     min_nlen      = 2.0 * radius * radius * 1e-12;
+
+    std::vector<BoundingBox> boxes(F.size());
+    for (size_t f = 0; f < F.size(); ++f)
+        for (int v : F[f])
+            boxes[f].extend(P[v]);
+    AABBTree tree;
+    tree.build(std::move(boxes));
+
+    struct Hit
+    {
+        double t, u, v;
+        int    face;
+    };
+    int back = 0;
+    for (Vec3 dir : dirs) {
+        dir                = dir.normalized();
+        const Vec3 origin  = center + dir * standoff;
+        const Vec3 ray_dir = -dir;
+        std::vector<Hit> hits;
+        tree.query_ray(origin, ray_dir, [&](int f) {
+            double t, u, v;
+            if (ray_triangle(origin, ray_dir, P[F[f][0]], P[F[f][1]], P[F[f][2]], 1e-6, t, &u, &v))
+                hits.push_back({ t, u, v, f });
+        });
+        if (hits.empty() || hits.size() % 2 == 1)
+            continue;
+        std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.t < b.t; });
+        if (hits[1].t - hits[0].t < coincident_t)
+            continue;
+        const Hit& h = hits.front();
+        Vec3       N = triangle_normal(P[F[h.face][0]], P[F[h.face][1]], P[F[h.face][2]]);
+        const double nlen = N.norm();
+        if (nlen < min_nlen)
+            continue;
+        N /= nlen;
+        if (std::min({ h.u, h.v, 1.0 - h.u - h.v }) <= bary_eps)
+            continue;
+        if (std::abs(N.dot(ray_dir)) < graze)
+            continue;
+        const Vec3 hit_pt  = origin + ray_dir * h.t;
+        const bool is_back = N.dot(origin - hit_pt) < -backface;
+        back += is_back ? 1 : 0;
+        if (face_hits)
+            face_hits->push_back({ h.face, is_back });
+    }
+    return back;
 }
 
 // ---------------------------------------------------------------------------

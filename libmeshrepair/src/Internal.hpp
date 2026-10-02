@@ -217,7 +217,17 @@ private:
 };
 
 // Ray / triangle intersection (Moeller-Trumbore). Returns true for t > tmin.
-bool ray_triangle(const Vec3& o, const Vec3& d, const Vec3& a, const Vec3& b, const Vec3& c, double tmin, double& t);
+// Optionally returns the barycentric coordinates (P = (1-u-v)a + ub + vc).
+bool ray_triangle(const Vec3& o, const Vec3& d, const Vec3& a, const Vec3& b, const Vec3& c, double tmin, double& t,
+                  double* u_out = nullptr, double* v_out = nullptr);
+
+// Port of Bambu Studio's reversed face test (libslic3r/MeshDiagnostics.cpp,
+// detect_visible_backfaces): 46 rays shot from outside the bounding box at its
+// center; the first surface each ray hits must face the ray. Meant for closed
+// meshes. Returns the number of rays seeing a back face first; face_hits
+// receives (face, seen_from_behind) for every ray that was not discarded.
+int visible_back_faces(const std::vector<Vec3>& P, const std::vector<Triangle>& F,
+                       std::vector<std::pair<int, bool>>* face_hits = nullptr);
 
 // ---------------------------------------------------------------------------
 // Shell analysis.

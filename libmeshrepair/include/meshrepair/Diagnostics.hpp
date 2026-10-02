@@ -41,11 +41,16 @@ struct MeshDiagnostics
     // Closed, consistently oriented shells that are inside out.
     size_t inverted_shells = 0;
 
+    // Bambu Studio's reversed face test on closed meshes: out of 46 rays shot
+    // at the model from outside, how many hit a back face first (an inside
+    // out shell, or a surface folded over itself).
+    size_t visible_back_faces = 0;
+
     double      volume = 0.0;
     double      area   = 0.0;
     BoundingBox bbox;
 
-    bool has_reversed_faces() const { return inconsistent_edges > 0 || inverted_shells > 0; }
+    bool has_reversed_faces() const { return inconsistent_edges > 0 || inverted_shells > 0 || visible_back_faces > 0; }
     bool watertight() const { return open_edges == 0 && non_manifold_edges == 0; }
     bool manifold() const { return non_manifold_edges == 0 && non_manifold_vertices == 0; }
 

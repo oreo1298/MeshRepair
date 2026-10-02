@@ -100,7 +100,8 @@ std::vector<uint8_t> classes_for_repaired(const RepairResult& r)
 
 size_t problem_count(const MeshDiagnostics& d)
 {
-    return d.open_edges + d.non_manifold_edges + d.non_manifold_vertices + d.inconsistent_edges + d.inverted_shells;
+    return d.open_edges + d.non_manifold_edges + d.non_manifold_vertices + d.inconsistent_edges + d.inverted_shells +
+           d.visible_back_faces;
 }
 
 } // namespace
@@ -600,6 +601,10 @@ void App::poll_job()
     if (a.slicer_clean())
         std::snprintf(buf, sizeof(buf), "Repaired in %.2f s. The model is now watertight and manifold.",
                       m_model->repair_seconds);
+    else if (a.watertight() && a.manifold() && a.inconsistent_edges == 0 && a.inverted_shells == 0)
+        std::snprintf(buf, sizeof(buf),
+                      "Repaired in %.2f s. Watertight and manifold, but the surface folds over itself in places.",
+                      m_model->repair_seconds);
     else
         std::snprintf(buf, sizeof(buf), "Repaired in %.2f s, but %s problems remain.", m_model->repair_seconds,
                       format_count(problem_count(a)).c_str());
@@ -927,6 +932,10 @@ void App::draw_diagnostics_table()
               "Edges between neighbouring faces facing opposite ways.\nShown as orange lines.");
     row_count("Inside-out shells", b.inverted_shells, aa.inverted_shells, true,
               "Closed parts whose normals all point inwards.\nShown in orange.");
+    row_count("Seen from behind", b.visible_back_faces, aa.visible_back_faces, true,
+              "Bambu Studio's reversed face test: of 46 views from outside, how many see the back\n"
+              "of a face first. Caused by inside-out parts or by surfaces folding over themselves\n"
+              "(e.g. a single sheet that cannot enclose a volume). Shown in red.");
     row_count("Degenerate faces", b.degenerate_faces, aa.degenerate_faces, true,
               "Faces with (almost) zero area. Harmless for slicing in most cases.");
     row_count("Duplicate faces", b.duplicate_faces, aa.duplicate_faces, true, nullptr);

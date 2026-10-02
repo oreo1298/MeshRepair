@@ -66,12 +66,23 @@ To build without it, pass `-DSLIC3R_MESHREPAIR=OFF`.
 **Any distribution (Arch included): AppImage through a container.** Bambu
 Studio's own `DockerBuild.sh` builds in an Ubuntu container from your local,
 already patched source tree and exports an AppImage, which runs on all
-distributions. It needs Docker or Podman.
+distributions. It needs Docker with BuildKit (buildx), which exports the
+AppImage from the container. On Arch, buildx is a separate package:
+`sudo pacman -S docker docker-buildx`. Without it, `-i` stops with
+`unknown shorthand flag: 'o' in -o`.
 
 ```sh
-./DockerBuild.sh -d   # build the dependencies image
+./DockerBuild.sh -d   # build the dependencies image (takes a long time)
 ./DockerBuild.sh -i   # build Bambu Studio and export an AppImage
+./build/BambuStudio_ubu22.AppImage
 ```
+
+Run `install.py` before `-i`, because the build copies the source tree into
+the container when it starts. In Bambu Studio, right-click an object that has
+errors and choose **Fix model**, or click its warning icon. If the AppImage
+doesn't start, it needs FUSE (`fuse3`) and WebKitGTK 4.0 (`webkit2gtk` on
+Arch), the same as the official AppImage. Running it with
+`--appimage-extract-and-run` works without FUSE.
 
 **Debian / Ubuntu / Fedora hosts:** Bambu Studio's build script supports these
 directly:

@@ -44,8 +44,16 @@ void copy_to(char* dst, size_t n, const std::string& s)
 
 FileDialog::~FileDialog()
 {
-    if (m_native && m_native->thread.joinable())
-        m_native->thread.detach(); // the dialog process keeps running; nothing to clean up
+    if (m_native && m_native->thread.joinable()) {
+        if (m_native->done) {
+            m_native->thread.join();
+        } else {
+            // The dialog is still open (application quitting): let the thread
+            // finish on its own and keep its state alive for it.
+            m_native->thread.detach();
+            (void)m_native.release();
+        }
+    }
 }
 
 void FileDialog::start(Mode mode, const std::string& title, const std::string& initial,

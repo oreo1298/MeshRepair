@@ -115,7 +115,7 @@ jobs:
           name="BambuStudio-${version}-MeshRepair-${sha}-x86_64.AppImage"
           mv BambuStudio/build/BambuStudio_ubu64.AppImage "$name"
           sha256sum "$name" > "$name.sha256"
-          webkit=$(ldd BambuStudio/build/src/bambu-studio | grep -o 'libwebkit2gtk-[0-9.]*' | head -n 1)
+          webkit=$(ldd BambuStudio/build/src/bambu-studio | grep -oE 'libwebkit2gtk-[0-9]+\.[0-9]+' | head -n 1)
           {
             echo "name=$name"
             echo "version=$version"
@@ -123,11 +123,20 @@ jobs:
             echo "webkit=$webkit"
           } >> "$GITHUB_OUTPUT"
       - name: Smoke test
+        env:
+          APPIMAGE: ${{ steps.out.outputs.name }}
         run: |
-          ./${{ steps.out.outputs.name }} --appimage-extract > /dev/null
-          test -x squashfs-root/AppRun
-          ldd squashfs-root/bin/bambu-studio | grep 'not found' || true
+          "./$APPIMAGE" --appimage-extract > /dev/null
+          # The AppImage's launcher puts bin/ on the library path.
+          missing=$(LD_LIBRARY_PATH=squashfs-root/bin ldd squashfs-root/bin/bambu-studio | grep 'not found' || true)
+          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
+          # It has to start and still be running after a minute.
+          sudo apt-get install -y -q xvfb xauth libgl1-mesa-dri > /dev/null
+          status=0
+          xvfb-run -a -s "-screen 0 1600x900x24" timeout -k 15 60 squashfs-root/AppRun || status=$?
           rm -rf squashfs-root
+          echo "exit status: $status (124 or 137: still running when stopped)"
+          [ "$status" -eq 124 ] || [ "$status" -eq 137 ]
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.out.outputs.name }}
@@ -162,6 +171,12 @@ jobs:
           template = open("MeshRepair/integration/bambustudio/appimage-release-notes.md").read()
           open("notes.md", "w").write(string.Template(template).substitute(values))
           EOF
+          # Unpublished drafts of earlier builds of this Bambu Studio version are replaced.
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,isDraft \
+            --jq ".[] | select(.isDraft and (.tagName | startswith(\"bambustudio-${VERSION}-meshrepair-\"))) | .tagName" |
+            while read -r old; do
+              if [ "$old" != "$tag" ]; then gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes; fi
+            done
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release upload "$tag" "$APPIMAGE" "$APPIMAGE.sha256" --repo "$GITHUB_REPOSITORY" --clobber
           else

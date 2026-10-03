@@ -101,9 +101,13 @@ jobs:
           cd bambu
           git sparse-checkout set --no-cone /CMakeLists.txt /src/CMakeLists.txt /src/libslic3r/CMakeLists.txt \
             /src/libslic3r/Win10ModelRepair.hpp /src/slic3r/Utils/ /src/slic3r/GUI/Gizmos/GLGizmoAdvancedCut.cpp \
-            '/src/slic3r/GUI/TextureImportDialog.*' /src/admesh/ /src/eigen/
+            '/src/slic3r/GUI/TextureImportDialog.*' /src/slic3r/GUI/Plater.cpp /src/admesh/ /src/eigen/
       - name: Run the installer
-        run: python3 integration/bambustudio/install.py bambu
+        run: |
+          python3 integration/bambustudio/install.py bambu
+          # The (Repair) link of the object info notification is optional for
+          # the installer; make sure it still finds it.
+          grep -q 'defined(HAS_MODEL_REPAIR)' bambu/src/slic3r/GUI/Plater.cpp
       - name: Compile the MeshRepair backend against Bambu Studio headers
         run: |
           sudo apt-get update && sudo apt-get install -y libboost-log-dev

@@ -15,6 +15,8 @@ It shares settings, presets and the printer login with other Bambu Studio instal
 - **FUSE.** On Arch, install `fuse3`. Without FUSE, start it with `--appimage-extract-and-run`.
 - **WebKitGTK** (`${webkit}`), like the official AppImage. On Arch, install `${arch_webkit}`.
 
+To add it to the application menu with its icon, run [`add-appimage-to-menu.sh`](${repo_url}/blob/${meshrepair_commit}/integration/bambustudio/add-appimage-to-menu.sh) with the path of the AppImage.
+
 To check the download: `sha256sum -c ${appimage}.sha256`
 
 ## Source code

@@ -151,6 +151,19 @@ index a65bf9c..1cee2ad 100644
          if (is_windows10()) {
              bool is_showed_dialog = false;
              bool user_fix_model   = false;
+diff --git a/src/slic3r/GUI/Plater.cpp b/src/slic3r/GUI/Plater.cpp
+index a20b41d..10f721f 100644
+--- a/src/slic3r/GUI/Plater.cpp
++++ b/src/slic3r/GUI/Plater.cpp
+@@ -27354,7 +27354,7 @@ void Plater::show_object_info()
+         };
+     }
+ 
+-    #ifndef __WINDOWS__
++    #if !defined(__WINDOWS__) && !defined(HAS_MODEL_REPAIR)
+     if (mesh_issues.has_any_issue()) {
+         info_manifold += into_u8("\n" + _L("Tips:") + "\n" +_L("To repair the model, please use a third-party tool before importing it into Bambu Studio, such as "));
+     }
 diff --git a/src/slic3r/GUI/TextureImportDialog.cpp b/src/slic3r/GUI/TextureImportDialog.cpp
 index bdc0296..e1d346c 100644
 --- a/src/slic3r/GUI/TextureImportDialog.cpp

@@ -10,7 +10,9 @@ This script makes the function available on Linux (and macOS) by:
     fix_mesh_by_win10_sdk() entry point with MeshRepair,
   * switching the "#ifdef HAS_WIN10SDK" guards of the repair features to a new
     HAS_MODEL_REPAIR macro, so the Fix model menu, the repair offered after
-    cutting and the repair during texture import are enabled.
+    cutting and the repair during texture import are enabled,
+  * offering "(Repair)" in the object info notification like on Windows,
+    instead of a link to a third-party repair tool.
 
 Windows builds that have the SDK keep using it unchanged.
 
@@ -182,6 +184,24 @@ def patch_fix_model_cpp(t: Tree):
     t.write(rel, "\n".join(out), "WinRT parts guarded by HAS_WIN10SDK, Fix model GUI shared")
 
 
+def patch_repair_notification(t: Tree):
+    """The object info notification (bottom right of the 3D view) offers
+    "(Repair)" for broken objects on Windows; everywhere else it recommends a
+    third-party repair tool instead. Offer the repair wherever it's available."""
+    rel = "src/slic3r/GUI/Plater.cpp"
+    s = t.read(rel)
+    guard = "#if !defined(__WINDOWS__) && !defined(HAS_MODEL_REPAIR)"
+    if guard in s:
+        return
+    m = re.search(r"^([ \t]*)#ifndef __WINDOWS__[ \t]*\n(?=(?:.*\n){0,4}?.*third-party tool)", s, re.M)
+    if not m:
+        # Optional: the repair still works from the object list without it.
+        t.changes.append(f"{rel}: repair link of the object info notification not found, skipped")
+        return
+    s = s[: m.start()] + m.group(1) + guard + "\n" + s[m.end():]
+    t.write(rel, s, "object info notification offers (Repair) instead of a third-party tool")
+
+
 def install_files(t: Tree):
     dst = t.root / "src" / "meshrepair"
     t.changes.append("src/meshrepair: vendored libmeshrepair")
@@ -221,6 +241,7 @@ def main():
         rename_guards(t, "src/slic3r/GUI/Gizmos/GLGizmoAdvancedCut.cpp", required=False)
         rename_guards(t, "src/slic3r/GUI/TextureImportDialog.cpp", required=False)
         rename_guards(t, "src/slic3r/GUI/TextureImportDialog.hpp", required=False)
+        patch_repair_notification(t)
         install_files(t)
 
     # Validate every step without writing anything, then apply.

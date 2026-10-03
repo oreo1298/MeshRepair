@@ -15,6 +15,7 @@ Windows:
 |---|---|---|
 | *Fix model* in the object list context menu | missing | available |
 | Click on the warning icon of a broken object to fix it | missing | available |
+| **(Repair)** link in the object info notification (bottom right) of a selected broken object | link to a third-party online repair site | available |
 | "Open edges may be caused by the cut tool, do you want to fix it now?" after cutting | missing | available |
 | Mesh repair when importing a textured model (texture to colour) | skipped | repairs before importing |
 
@@ -95,6 +96,21 @@ doesn't start, it needs FUSE (`fuse3`) and WebKitGTK 4.0 (`webkit2gtk` on
 Arch), the same as the official AppImage. Running it with
 `--appimage-extract-and-run` works without FUSE.
 
+To get Bambu Studio into your application menu with its icon, move the
+AppImage to a permanent place and run
+[`add-appimage-to-menu.sh`](add-appimage-to-menu.sh) once:
+
+```sh
+mkdir -p ~/Applications
+mv build/BambuStudio_ubu22.AppImage ~/Applications/
+../MeshRepair/integration/bambustudio/add-appimage-to-menu.sh ~/Applications/BambuStudio_ubu22.AppImage
+```
+
+It installs the icon and a menu entry that matches Bambu Studio's window, so
+the taskbar or dock shows the icon too. It also registers STL, 3MF, OBJ and
+STEP files and MakerWorld's "Open in Bambu Studio" links.
+`add-appimage-to-menu.sh --remove` undoes it.
+
 **Debian / Ubuntu / Fedora hosts:** Bambu Studio's build script supports these
 directly:
 
@@ -158,6 +174,10 @@ cd BambuStudio && patch -p1 < ../MeshRepair/integration/bambustudio/bambustudio-
 * `FixModelByWin10.hpp`, `Win10ModelRepair.hpp`, `GLGizmoAdvancedCut.cpp` and
   `TextureImportDialog.*`: their `HAS_WIN10SDK` guards become
   `HAS_MODEL_REPAIR`.
+* `Plater.cpp`: the object info notification shows its **(Repair)** link
+  whenever a repair backend is available. Without one it still recommends a
+  third-party tool, as before. This edit is optional: if a future Bambu Studio
+  version changes that code, the installer skips it and says so.
 
 The function names still contain "win10", which keeps the change small and
 easy to carry across Bambu Studio updates.
